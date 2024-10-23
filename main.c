@@ -4,7 +4,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mount.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -53,7 +55,25 @@ void wait_init(int fd[2]) {
 int run_argv(void *arg) {
     struct CloneParams *params = arg;
     wait_init(params->fd);
+
     print_resuid();
+
+    int rt;
+    rt = mount("alpine", "alpine", NULL, MS_BIND, NULL);
+    check(rt, "mount root error");
+
+    rt = chdir("alpine");
+    check(rt, "chdir root");
+
+    rt = syscall(SYS_pivot_root, ".", ".");
+    check(rt, "pivot root error");
+
+    rt = mount(NULL, "/proc", "proc", 0, NULL);
+    check(rt, "mount proc error");
+
+    rt = umount2(".", MNT_DETACH);
+    check(rt, "umount root error");
+
     return execvp(*params->argv, params->argv);
 }
 
@@ -64,9 +84,9 @@ int main(int argc, char *argv[]) {
     struct CloneParams params = {.argv = argv + 1};
     check(pipe(params.fd), "pipe");
     void *child_stack = malloc(STACK_SIZE) + STACK_SIZE;
-    int clone_flags = SIGCHLD | CLONE_NEWUSER | CLONE_NEWUTS | CLONE_NEWIPC |
-                      CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWNET |
-                      CLONE_NEWCGROUP;
+    int clone_flags = CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNS |
+                      CLONE_NEWUTS | CLONE_NEWNET | CLONE_NEWIPC |
+                      CLONE_NEWCGROUP | SIGCHLD;
 
     int pid = clone(run_argv, child_stack, clone_flags, &params);
     if (pid < 0) panic("clone error");
