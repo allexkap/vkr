@@ -19,9 +19,10 @@ def parse_args():
     parser.add_argument('-n', '--name', type=str, default='')
     parser.add_argument('-r', '--remove', action='store_true')
     parser.add_argument('-p', '--private', action='store_true')
+    parser.add_argument('-o', '--overlay', action='store_true')
     parser.add_argument('-c', '--current-dir', action='store_true')
     parser.add_argument('--path', type=Path, default='~/.local/state/vkr')
-    parser.add_argument('--bwrap-args', type=str)
+    parser.add_argument('--bwrap', type=str)
     parser.add_argument('inner', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
@@ -53,7 +54,8 @@ def main():
     args = parse_args()
 
     if args.remove:
-        rmtree(args.path)
+        if args.path.exists():
+            rmtree(args.path)
         exit(0)
 
     if not args.path.exists():
@@ -61,6 +63,7 @@ def main():
 
     flags = [
         '--unshare-all',
+        '--share-net',
         '--die-with-parent',
     ]
 
@@ -75,22 +78,40 @@ def main():
     home_dirs = []
     if args.private:
         home_dirs.extend(['--tmpfs', os.environ['HOME']])
+    elif args.overlay:
+        upper_path = args.path / 'upper'
+        upper_path.mkdir(exist_ok=True)
+        work_path = args.path / 'work'
+        work_path.mkdir(exist_ok=True)
+        home_dirs.extend(
+            [
+                '--overlay-src',
+                os.environ['HOME'],
+                '--overlay',
+                upper_path.as_posix(),
+                work_path.as_posix(),
+                os.environ['HOME'],
+            ]
+        )
     else:
-        home_dirs.extend(['--bind', args.path.as_posix(), os.environ['HOME']])
+        home_path = args.path / 'home'
+        home_path.mkdir(exist_ok=True)
+        home_dirs.extend(['--bind', home_path.as_posix(), os.environ['HOME']])
 
     other_dirs = []
     if args.current_dir:
         home_dirs.extend(['--bind', os.getcwd(), os.getcwd()])
 
-    xdg_runtime_dir = os.environ['XDG_RUNTIME_DIR']
     run_dirs = ['--tmpfs', '/run']
-    for d in RUN_DIRS:
-        d = f'{xdg_runtime_dir}/{d}'
-        run_dirs.extend(['--bind', d, d])
+    if 'XDG_RUNTIME_DIR' in os.environ:
+        xdg_runtime_dir = os.environ['XDG_RUNTIME_DIR']
+        for d in RUN_DIRS:
+            d = f'{xdg_runtime_dir}/{d}'
+            run_dirs.extend(['--bind', d, d])
 
     passthrough_args = []
-    if args.bwrap_args is not None:
-        passthrough_args.extend(shlex.split(args.bwrap_args))
+    if args.bwrap is not None:
+        passthrough_args.extend(shlex.split(args.bwrap))
 
     bwrap_args = [
         'bwrap',
