@@ -6,21 +6,12 @@ from pathlib import Path
 
 import mount
 
-# todo
-OVERLAY_DIRS = ['etc', 'root', 'srv', 'usr', 'var']
-LINKS = [
-    ('/bin', '/usr/bin'),
-    ('/sbin', '/usr/bin'),
-    # ('/usr/sbin/', '/usr/bin'),
-    ('/lib', '/usr/lib'),
-    ('/lib64', '/usr/lib'),
-    # ('/var/run', '/run'),
-]
+RUN_DIRS = ['wayland-1', 'pipewire-0', 'pulse']
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--path', type=Path, default='/tmp/vkr')
+    parser.add_argument('-p', '--path', type=Path, default='/var/tmp/vkr')
     parser.add_argument('-n', '--name', type=str, default='')
     parser.add_argument('inner', nargs=argparse.REMAINDER)
 
@@ -28,7 +19,7 @@ def parse_args():
     if not args.inner:
         args.inner = ['bash']
     if args.name == '':
-        args.name = args.inner[0]
+        args.name = Path(args.inner[0]).name
     args.path /= args.name
     return args
 
@@ -55,33 +46,39 @@ def main():
     if not args.path.exists():
         args.path.mkdir(parents=True)
 
-    uid, gid = os.getuid(), os.getgid()
+    flags = [
+        '--unshare-all',
+        '--die-with-parent',
+    ]
 
-    os.unshare(os.CLONE_NEWNS | os.CLONE_NEWUSER | os.CLONE_NEWPID)
+    # fmt:off
+    special_fs = [
+        '--ro-bind', '/', '/',
+        '--proc', '/proc',
+        '--dev', '/dev',
+    ]
+    home_fs = [
+        '--bind', args.path.as_posix(), '/home',
+    ]
+    # fmt:on
 
-    pid = os.fork()
-    if pid:
-        _, status = os.waitpid(pid, 0)
-        assert os.WIFEXITED(status)
-        exit(os.WEXITSTATUS(status))
+    xdg_runtime_dir = os.environ['XDG_RUNTIME_DIR']
+    run_dirs = ['--tmpfs', '/run']
+    for d in RUN_DIRS:
+        d = f'{xdg_runtime_dir}/{d}'
+        run_dirs.extend(['--bind', d, d])
 
-    write('/proc/self/setgroups', 'deny')
-    write('/proc/self/uid_map', f'0 {uid} 1')
-    write('/proc/self/gid_map', f'0 {gid} 1')
+    bwrap_args = [
+        'bwrap',
+        *flags,
+        *special_fs,
+        *home_fs,
+        *run_dirs,
+        *args.inner,
+    ]
 
-    os.chdir(args.path)
-
-    mount.mount(None, args.path / 'proc', 'proc')
-    for dir in OVERLAY_DIRS:
-        mount.mount(
-            Path('/') / dir, args.path / dir, flags=mount.MS_BIND | mount.MS_SHARED
-        )
-
-    os.unshare(os.CLONE_NEWUSER)
-    write('/proc/self/uid_map', f'{uid} 0 1')
-    write('/proc/self/gid_map', f'{gid} 0 1')
-
-    os.execvp(args.inner[0], args.inner)
+    print(' '.join(bwrap_args))
+    os.execvp(bwrap_args[0], bwrap_args)
 
 
 if __name__ == '__main__':
