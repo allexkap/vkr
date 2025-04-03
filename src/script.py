@@ -21,8 +21,9 @@ def parse_args():
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-o', '--overlay', action='store_true')
     parser.add_argument('-c', '--current-dir', action='store_true')
-    parser.add_argument('--path', type=Path, default='~/.local/state/vkr')
+    parser.add_argument('--storage', type=Path, default='~/.local/state/vkr')
     parser.add_argument('--bwrap', type=str)
+    parser.add_argument('--clean-all', action='store_true')
     parser.add_argument('inner', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
@@ -30,32 +31,27 @@ def parse_args():
         args.inner = ['bash']
     if args.name == '':
         args.name = Path(args.inner[0]).name
-    args.path = args.path.expanduser() / args.name
+    args.storage = args.storage.expanduser()
+    args.path = args.storage / args.name
     return args
 
 
-def write(path, *data):
-    with open(path, 'w') as file:
-        for line in data:
-            file.write(line)
-
-
-def cat(path):
-    with open(path, 'r') as file:
-        print(f'{repr(path)}:\n{repr(file.read())}')
-
-
-def print_res_ug_id():
-    for d, f in (('uid', os.getresuid), ('gid', os.getresgid)):
-        print(d, *map('='.join, zip(('real', 'effective', 'saved'), map(str, f()))))
+def rm_recursive(path: Path):
+    if path.exists():
+        if input(f"Remove directory '{path}'? [y/N] ").lower() == 'y':
+            os.system(f'chmod -R 777 {path}')  # ._.
+            rmtree(path)
 
 
 def main():
     args = parse_args()
 
+    if args.clean_all:
+        rm_recursive(args.storage)
+        exit(0)
+
     if args.remove:
-        if args.path.exists():
-            rmtree(args.path)
+        rm_recursive(args.path)
         exit(0)
 
     if not args.path.exists():
