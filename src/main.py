@@ -1,11 +1,14 @@
+#!/usr/bin/env python3
+
 import argparse
 import logging
 import os
 import shlex
+import shutil
+import sys
 from pathlib import Path
-from shutil import rmtree
 
-RUN_DIRS = ['wayland-1', 'pipewire-0', 'pulse']
+RUN_DIRS = []
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -40,10 +43,18 @@ def rm_recursive(path: Path):
     if path.exists():
         if input(f"Remove directory '{path}'? [y/N] ").lower() == 'y':
             os.system(f'chmod -R 777 {path}')  # ._.
-            rmtree(path)
+            shutil.rmtree(path)
+
+
+def check_bwrap():
+    if not shutil.which('bwrap'):
+        print('Bubblewrap is required but not installed', file=sys.stderr)
+        exit(1)
 
 
 def main():
+    check_bwrap()
+
     args = parse_args()
 
     if args.clean_all:
