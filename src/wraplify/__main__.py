@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from path import glob
+from .path import glob
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -53,11 +53,11 @@ def check_bwrap():
         exit(1)
 
 
-def load_paths(config_path):
+def load_paths():
     paths = set()
-    with open(config_path) as file:
-        for line in file:
-            paths |= glob(line)
+    file = ['${XDG_RUNTIME_DIR}/wayland-\\d+\n', '${XDG_RUNTIME_DIR}/pipewire-\\d+\n']
+    for line in file:
+        paths |= glob(line)
     return paths
 
 
@@ -130,7 +130,7 @@ def main():
         run_dirs.extend(['--dir', xdg_runtime_dir])
 
     include_paths = []
-    for path in load_paths('default.cfg'):
+    for path in load_paths():
         include_paths.extend(['--bind', path.as_posix(), path.as_posix()])
 
     passthrough_args = []

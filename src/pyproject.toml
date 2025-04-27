@@ -1,10 +1,10 @@
 [project]
-name = "wrapify"
-version = "0.1.0"
-description = "Add your description here"
+name = "wraplify"
+version = "0.2.2"
+description = "Wraplify simplifies the process of isolating untrusted code by providing a user-friendly Python wrapper around bubblewrap"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-wrapify = "main:main"
+wraplify = "wraplify.__main__:main"
