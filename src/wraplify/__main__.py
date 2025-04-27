@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .path import glob
+from . import conf
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -24,9 +24,11 @@ def parse_args():
     parser.add_argument('-p', '--private', action='store_true')
     parser.add_argument('-o', '--overlay', action='store_true')
     parser.add_argument('-c', '--current-dir', action='store_true')
-    parser.add_argument('--storage', type=Path, default='~/.local/state/vkr')
+    parser.add_argument('--storage', type=Path, default='~/.local/state/wraplify')
+    parser.add_argument('--config', type=Path, default='~/.config/wraplify')
     parser.add_argument('--net', action='store_true')
     parser.add_argument('--bwrap', type=str)
+    parser.add_argument('--clean-envs', action='store_true')
     parser.add_argument('--clean-all', action='store_true')
     parser.add_argument('inner', nargs=argparse.REMAINDER)
 
@@ -35,6 +37,7 @@ def parse_args():
         args.inner = ['bash']
     if args.name == '':
         args.name = Path(args.inner[0]).name
+    args.config = args.config.expanduser()
     args.storage = args.storage.expanduser()
     args.path = args.storage / args.name
     return args
@@ -53,20 +56,17 @@ def check_bwrap():
         exit(1)
 
 
-def load_paths():
-    paths = set()
-    file = ['${XDG_RUNTIME_DIR}/wayland-\\d+\n', '${XDG_RUNTIME_DIR}/pipewire-\\d+\n']
-    for line in file:
-        paths |= glob(line)
-    return paths
-
-
 def main():
     check_bwrap()
 
     args = parse_args()
 
     if args.clean_all:
+        rm_recursive(args.config)
+        rm_recursive(args.storage)
+        exit(0)
+
+    if args.clean_envs:
         rm_recursive(args.storage)
         exit(0)
 
@@ -130,7 +130,7 @@ def main():
         run_dirs.extend(['--dir', xdg_runtime_dir])
 
     include_paths = []
-    for path in load_paths():
+    for path in conf.load_config(args.config, args.name):
         include_paths.extend(['--bind', path.as_posix(), path.as_posix()])
 
     passthrough_args = []

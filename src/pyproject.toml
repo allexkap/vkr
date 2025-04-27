@@ -1,6 +1,6 @@
 [project]
 name = "wraplify"
-version = "0.2.2"
+version = "0.2.3"
 description = "Wraplify simplifies the process of isolating untrusted code by providing a user-friendly Python wrapper around bubblewrap"
 readme = "README.md"
 requires-python = ">=3.13"
