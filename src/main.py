@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-RUN_DIRS = []
+from path import glob
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -53,6 +53,14 @@ def check_bwrap():
         exit(1)
 
 
+def load_paths(config_path):
+    paths = set()
+    with open(config_path) as file:
+        for line in file:
+            paths |= glob(line)
+    return paths
+
+
 def main():
     check_bwrap()
 
@@ -70,7 +78,11 @@ def main():
         args.path.mkdir(parents=True)
 
     flags = [
-        '--unshare-all',
+        '--unshare-user',
+        '--unshare-ipc',
+        '--unshare-pid',
+        '--unshare-net',
+        '--unshare-uts',
         '--die-with-parent',
     ]
 
@@ -91,10 +103,8 @@ def main():
     elif args.overlay:
         upper_path = args.path / 'upper'
         upper_path.mkdir(exist_ok=True)
-
         work_path = args.path / 'work'
         work_path.mkdir(exist_ok=True)
-
         home_dirs.extend(
             [
                 '--overlay-src',
@@ -117,9 +127,11 @@ def main():
     run_dirs = ['--tmpfs', '/run']
     if 'XDG_RUNTIME_DIR' in os.environ:
         xdg_runtime_dir = os.environ['XDG_RUNTIME_DIR']
-        for d in RUN_DIRS:
-            d = f'{xdg_runtime_dir}/{d}'
-            run_dirs.extend(['--bind', d, d])
+        run_dirs.extend(['--dir', xdg_runtime_dir])
+
+    include_paths = []
+    for path in load_paths('default.cfg'):
+        include_paths.extend(['--bind', path.as_posix(), path.as_posix()])
 
     passthrough_args = []
     if args.bwrap is not None:
@@ -132,11 +144,12 @@ def main():
         *home_dirs,
         *run_dirs,
         *other_dirs,
+        *include_paths,
         *passthrough_args,
         *args.inner,
     ]
 
-    logging.debug(' '.join(bwrap_args))
+    logging.info(' '.join(bwrap_args))
     os.execvp(bwrap_args[0], bwrap_args)
 
 
