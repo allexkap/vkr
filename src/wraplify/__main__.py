@@ -91,6 +91,7 @@ def main():
         '--ro-bind', '/', '/',
         '--proc', '/proc',
         '--dev', '/dev',
+        '--tmpfs', '/run',
     ]
     # fmt:on
 
@@ -122,16 +123,14 @@ def main():
 
     other_dirs = []
     if args.current_dir:
-        home_dirs.extend(['--bind', os.getcwd(), os.getcwd()])
+        other_dirs.extend(['--bind', os.getcwd(), os.getcwd()])
 
-    run_dirs = ['--tmpfs', '/run']
     if 'XDG_RUNTIME_DIR' in os.environ:
         xdg_runtime_dir = os.environ['XDG_RUNTIME_DIR']
-        run_dirs.extend(['--dir', xdg_runtime_dir])
+        other_dirs.extend(['--dir', xdg_runtime_dir])
 
-    include_paths = []
     for path in conf.load_config(args.config, args.name):
-        include_paths.extend(['--bind', path.as_posix(), path.as_posix()])
+        other_dirs.extend(['--bind', path.as_posix(), path.as_posix()])
 
     passthrough_args = []
     if args.bwrap is not None:
@@ -142,9 +141,7 @@ def main():
         *flags,
         *special_dirs,
         *home_dirs,
-        *run_dirs,
         *other_dirs,
-        *include_paths,
         *passthrough_args,
         *args.inner,
     ]
