@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument('-o', '--overlay', action='store_true')
     parser.add_argument('-c', '--current-dir', action='store_true')
     parser.add_argument('--storage', type=Path, default='~/.local/state/vkr')
+    parser.add_argument('--net', action='store_true')
     parser.add_argument('--bwrap', type=str)
     parser.add_argument('--clean-all', action='store_true')
     parser.add_argument('inner', nargs=argparse.REMAINDER)
@@ -70,7 +71,6 @@ def main():
 
     flags = [
         '--unshare-all',
-        '--share-net',
         '--die-with-parent',
     ]
 
@@ -82,14 +82,19 @@ def main():
     ]
     # fmt:on
 
+    if args.net:
+        flags.append('--share-net')
+
     home_dirs = []
     if args.private:
         home_dirs.extend(['--tmpfs', os.environ['HOME']])
     elif args.overlay:
         upper_path = args.path / 'upper'
         upper_path.mkdir(exist_ok=True)
+
         work_path = args.path / 'work'
         work_path.mkdir(exist_ok=True)
+
         home_dirs.extend(
             [
                 '--overlay-src',
